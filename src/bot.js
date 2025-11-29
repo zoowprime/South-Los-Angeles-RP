@@ -1,6 +1,16 @@
 // src/bot.js
 require('dotenv').config({ path: './id.env' });
-const { Client, GatewayIntentBits, ActivityType } = require('discord.js');
+
+const {
+  Client,
+  GatewayIntentBits,
+  ActivityType,
+  Collection,
+} = require('discord.js');
+
+const fs   = require('fs');
+const path = require('path');
+
 const { sendTicketPanel, handleTicketInteraction } = require('./ticket');
 
 // ─────────────────────────────────────────────────────────────
@@ -8,9 +18,43 @@ const { sendTicketPanel, handleTicketInteraction } = require('./ticket');
 // ─────────────────────────────────────────────────────────────
 const client = new Client({
   intents: [
-    GatewayIntentBits.Guilds, // pour les slash commands & interactions
+    GatewayIntentBits.Guilds, // slash commands & interactions
   ],
 });
+
+// Collection pour les commandes
+client.commands = new Collection();
+
+// ─────────────────────────────────────────────────────────────
+// Chargement des commandes (dossier /src/commands)
+// ─────────────────────────────────────────────────────────────
+function loadCommands() {
+  const commandsPath = path.join(__dirname, 'commands');
+
+  if (!fs.existsSync(commandsPath)) {
+    console.warn('⚠️ Dossier "src/commands" introuvable, aucune commande slash chargée.');
+    return;
+  }
+
+  const commandFiles = fs
+    .readdirSync(commandsPath)
+    .filter(file => file.endsWith('.js'));
+
+  for (const file of commandFiles) {
+    const filePath = path.join(commandsPath, file);
+    try {
+      const command = require(filePath);
+      if (command && command.data && command.execute) {
+        client.commands.set(command.data.name, command);
+        console.log(`✅ Commande chargée: /${command.data.name}`);
+      } else {
+        console.warn(`⚠️ Fichier commande invalide (manque data ou execute) : ${file}`);
+      }
+    } catch (err) {
+      console.error(`❌ Erreur au chargement de la commande ${file}:`, err);
+    }
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 // Quand le bot est prêt
@@ -18,8 +62,11 @@ const client = new Client({
 client.once('ready', async () => {
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
 
+  // Charger les commandes
+  loadCommands();
+
   // Activité du bot
-  const activityText = process.env.BOT_ACTIVITY_TEXT || 'SLA RP PS4';
+  const activityText    = process.env.BOT_ACTIVITY_TEXT || 'SLA RP PS4';
   const activityTypeEnv = (process.env.BOT_ACTIVITY_TYPE || 'WATCHING').toUpperCase();
 
   const activityType =
@@ -61,13 +108,57 @@ client.once('ready', async () => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// Gestion des interactions (tickets, etc.)
+// Gestion des interactions (tickets, slash, inventaire)
 // ─────────────────────────────────────────────────────────────
 client.on('interactionCreate', async (interaction) => {
+  // 1) Tickets (menu + boutons)
   try {
     await handleTicketInteraction(interaction);
   } catch (err) {
     console.error('Erreur handleTicketInteraction :', err);
+  }
+
+  // 2) Slash commands
+  if (interaction.isChatInputCommand()) {
+    const command = client.commands.get(interaction.commandName);
+    if (!command) return;
+
+    try {
+      await command.execute(interaction);
+    } catch (err) {
+      console.error(`Erreur lors de l’exécution de /${interaction.commandName} :`, err);
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: '❌ Une erreur est survenue pendant l’exécution de la commande.',
+          ephemeral: true,
+        }).catch(() => {});
+      }
+    }
+    return;
+  }
+
+  // 3) Boutons d’inventaire (Donner / Utiliser / Jeter)
+  if (interaction.isButton()) {
+    if (interaction.customId === 'inv_give') {
+      return interaction.reply({
+        content: '📤 La fonction **Donner** est en cours de mise en place.',
+        ephemeral: true,
+      });
+    }
+
+    if (interaction.customId === 'inv_use') {
+      return interaction.reply({
+        content: '📩 La fonction **Utiliser** est en cours de mise en place.',
+        ephemeral: true,
+      });
+    }
+
+    if (interaction.customId === 'inv_drop') {
+      return interaction.reply({
+        content: '📥 La fonction **Jeter** est en cours de mise en place.',
+        ephemeral: true,
+      });
+    }
   }
 });
 
