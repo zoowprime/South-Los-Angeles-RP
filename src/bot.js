@@ -12,6 +12,7 @@ const fs   = require('fs');
 const path = require('path');
 
 const { sendTicketPanel, handleTicketInteraction } = require('./ticket');
+const { handleInventoryInteraction }             = require('./inventoryInteractions');
 
 // ─────────────────────────────────────────────────────────────
 // Client Discord
@@ -108,17 +109,24 @@ client.once('ready', async () => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// Gestion des interactions (tickets, slash, inventaire)
+// Gestion des interactions (tickets, inventaire, slash)
 // ─────────────────────────────────────────────────────────────
 client.on('interactionCreate', async (interaction) => {
-  // 1) Tickets (menu + boutons)
+  // 1) Tickets (menu + boutons de ticket)
   try {
     await handleTicketInteraction(interaction);
   } catch (err) {
     console.error('Erreur handleTicketInteraction :', err);
   }
 
-  // 2) Slash commands
+  // 2) Inventaire (boutons, selects, modals Donner / Utiliser / Jeter)
+  try {
+    await handleInventoryInteraction(interaction);
+  } catch (err) {
+    console.error('Erreur handleInventoryInteraction :', err);
+  }
+
+  // 3) Slash commands
   if (interaction.isChatInputCommand()) {
     const command = client.commands.get(interaction.commandName);
     if (!command) return;
@@ -133,31 +141,6 @@ client.on('interactionCreate', async (interaction) => {
           ephemeral: true,
         }).catch(() => {});
       }
-    }
-    return;
-  }
-
-  // 3) Boutons d’inventaire (Donner / Utiliser / Jeter)
-  if (interaction.isButton()) {
-    if (interaction.customId === 'inv_give') {
-      return interaction.reply({
-        content: '📤 La fonction **Donner** est en cours de mise en place.',
-        ephemeral: true,
-      });
-    }
-
-    if (interaction.customId === 'inv_use') {
-      return interaction.reply({
-        content: '📩 La fonction **Utiliser** est en cours de mise en place.',
-        ephemeral: true,
-      });
-    }
-
-    if (interaction.customId === 'inv_drop') {
-      return interaction.reply({
-        content: '📥 La fonction **Jeter** est en cours de mise en place.',
-        ephemeral: true,
-      });
     }
   }
 });
