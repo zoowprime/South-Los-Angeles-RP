@@ -26,6 +26,7 @@ module.exports = {
   async execute(interaction) {
     const sub = interaction.options.getSubcommand();
 
+    // /banque codedefinir
     if (sub === 'codedefinir') {
       const embed = new EmbedBuilder()
         .setColor(0x166534)
@@ -58,6 +59,7 @@ module.exports = {
       });
     }
 
+    // /banque compte
     if (sub === 'compte') {
       await interaction.deferReply({ ephemeral: true });
       return startUserPinFlow(interaction);
