@@ -11,8 +11,10 @@ const {
 const fs   = require('fs');
 const path = require('path');
 
+// Modules internes
 const { sendTicketPanel, handleTicketInteraction } = require('./ticket');
-const { handleInventoryInteraction }             = require('./inventoryInteractions');
+const { handleInventoryInteraction }              = require('./inventoryInteractions');
+const { handleBankInteraction }                   = require('./bankInteractions');
 
 // ─────────────────────────────────────────────────────────────
 // Client Discord
@@ -109,7 +111,7 @@ client.once('ready', async () => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// Gestion des interactions (tickets, inventaire, slash)
+// Gestion des interactions (tickets, banque, inventaire, slash)
 // ─────────────────────────────────────────────────────────────
 client.on('interactionCreate', async (interaction) => {
   // 1) Tickets (menu + boutons de ticket)
@@ -119,14 +121,21 @@ client.on('interactionCreate', async (interaction) => {
     console.error('Erreur handleTicketInteraction :', err);
   }
 
-  // 2) Inventaire (boutons, selects, modals Donner / Utiliser / Jeter)
+  // 2) Banque (PIN, boutons, sélects, modals)
+  try {
+    await handleBankInteraction(interaction);
+  } catch (err) {
+    console.error('Erreur handleBankInteraction :', err);
+  }
+
+  // 3) Inventaire (boutons, selects, modals Donner / Utiliser / Jeter)
   try {
     await handleInventoryInteraction(interaction);
   } catch (err) {
     console.error('Erreur handleInventoryInteraction :', err);
   }
 
-  // 3) Slash commands
+  // 4) Slash commands
   if (interaction.isChatInputCommand()) {
     const command = client.commands.get(interaction.commandName);
     if (!command) return;
