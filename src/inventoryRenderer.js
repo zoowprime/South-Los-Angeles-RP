@@ -5,27 +5,27 @@ const { itemCatalog } = require('./data/itemCatalog');
 const { getItemIconPath } = require('./data/itemIcons');
 const { getUserSnapshot, getTotalWeight } = require('./data/inventoryStore');
 
-// Police Open Sans (adapte le chemin si différent)
+// Charger police OpenSans-Bold
 try {
-  registerFont(path.join(__dirname, 'assets', 'fonts', 'OpenSans-Regular.ttf'), {
-    family: 'OpenSans',
-  });
-} catch (e) {
-  // Si la police n'existe pas encore, on laisse la police par défaut
-  console.warn('[INV] Impossible de charger OpenSans-Regular, utilisation police par défaut.');
+  registerFont(
+    path.join(__dirname, 'assets', 'fonts', 'OpenSans-Bold.ttf'),
+    { family: 'OpenSansBold' }
+  );
+} catch (err) {
+  console.warn("[INV] Impossible de charger OpenSans-Bold.ttf");
 }
 
-// Taille de l’inventaire
+// Dimensions
 const WIDTH = 1200;
 const HEIGHT = 700;
 
-// Grille 3 x 5
+// Grille
 const COLS = 3;
 const ROWS = 5;
 
-// On centre grossièrement la grille sur l'image
-const GRID_WIDTH = WIDTH * 0.8;   // 80% de largeur
-const GRID_HEIGHT = HEIGHT * 0.7; // 70% de hauteur
+const GRID_WIDTH = WIDTH * 0.80;
+const GRID_HEIGHT = HEIGHT * 0.70;
+
 const GRID_X = (WIDTH - GRID_WIDTH) / 2;
 const GRID_Y = (HEIGHT - GRID_HEIGHT) / 2;
 
@@ -34,76 +34,74 @@ const CELL_H = GRID_HEIGHT / ROWS;
 
 // URLs des fonds selon le poids
 function getBackgroundUrl(weight) {
-  const w = weight || 0;
+  if (weight <= 0)
+    return "https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_clean.png";
 
-  if (w <= 0) {
-    return 'https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_clean.png';
-  }
-  if (w > 0 && w < 2) {
-    return 'https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_1kg-2kg.png';
-  }
-  if (w === 2) {
-    return 'https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_2kg.png';
-  }
-  if (w > 2 && w < 3) {
-    return 'https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_2kg-3kg.png';
-  }
-  if (w >= 4 && w < 5) {
-    return 'https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_4kg-5kg.png';
-  }
-  if (w >= 5 && w < 6) {
-    return 'https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_5kg-6kg.png';
-  }
-  if (w === 7) {
-    return 'https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_7kg.png';
-  }
-  if (w >= 8) {
-    return 'https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_full.png';
-  }
+  if (weight > 0 && weight < 2)
+    return "https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_1kg-2kg.png";
 
-  // fallback
-  return 'https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_clean.png';
+  if (weight === 2)
+    return "https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_2kg.png";
+
+  if (weight > 2 && weight < 3)
+    return "https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_2kg-3kg.png";
+
+  if (weight >= 4 && weight < 5)
+    return "https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_4kg-5kg.png";
+
+  if (weight >= 5 && weight < 6)
+    return "https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_5kg-6kg.png";
+
+  if (weight === 7)
+    return "https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_7kg.png";
+
+  if (weight >= 8)
+    return "https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_full.png";
+
+  return "https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/inventaire/inventory_clean.png";
 }
 
 /**
- * Dessine le texte centré dans une case
- */
-function drawCenteredText(ctx, text, x, y, maxWidth) {
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, x, y, maxWidth);
-}
-
-/**
- * Rendu complet de l’inventaire d’un joueur
- * Retourne { buffer, filename }
+ * Rendu complet de l’inventaire
  */
 async function renderInventory(userId) {
   const snapshot = getUserSnapshot(userId);
-  const weight = Math.round(getTotalWeight(userId) * 10) / 10; // 1 décimale
+  const weight = Math.round(getTotalWeight(userId) * 10) / 10;
 
-  const bgUrl = getBackgroundUrl(weight);
-  const bgImage = await loadImage(bgUrl);
+  const bg = await loadImage(getBackgroundUrl(weight));
 
   const canvas = createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext('2d');
 
   // Fond
-  ctx.drawImage(bgImage, 0, 0, WIDTH, HEIGHT);
+  ctx.drawImage(bg, 0, 0, WIDTH, HEIGHT);
 
-  // Style texte général
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '18px OpenSans';
+  // Style texte
+  ctx.fillStyle = "#FFFFFF";
+  ctx.font = "20px OpenSansBold";
 
-  // Items : on les range dans un array (max 15)
+  // ---------------------------------------------------------
+  //     🔥 NOUVEAU : Affichage du poids dans la barre du haut
+  // ---------------------------------------------------------
+  const weightText = `${weight.toFixed(1)} / 8 kg`;
+
+  // Coordonnées précises basées sur ton HUD
+  const WEIGHT_X = 880; // aligné à droite dans la barre
+  const WEIGHT_Y = 122; // centré verticalement dans la barre
+
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  ctx.fillText(weightText, WEIGHT_X, WEIGHT_Y);
+
+  // ---------------------------------------------------------
+  //     Grille d’items
+  // ---------------------------------------------------------
   const entries = Object.values(snapshot.items || {}).filter(e => e.quantity > 0);
-  entries.sort((a, b) => a.id.localeCompare(b.id));
-  const limited = entries.slice(0, COLS * ROWS);
 
-  for (let index = 0; index < limited.length; index++) {
-    const entry = limited[index];
-    const itemDef = itemCatalog[entry.id];
-    if (!itemDef) continue;
+  const limited = entries.slice(0, COLS * ROWS);
+  limited.forEach(async (entry, index) => {
+    const item = itemCatalog[entry.id];
+    if (!item) return;
 
     const col = index % COLS;
     const row = Math.floor(index / COLS);
@@ -118,52 +116,27 @@ async function renderInventory(userId) {
     if (iconPath) {
       try {
         const icon = await loadImage(iconPath);
-        const iconSize = Math.min(CELL_W, CELL_H) * 0.6;
-        const iconX = centerX - iconSize / 2;
-        const iconY = centerY - iconSize / 2 - 5;
-
-        ctx.drawImage(icon, iconX, iconY, iconSize, iconSize);
-      } catch (e) {
-        console.warn('[INV] Impossible de charger icône pour', entry.id, iconPath, e);
-      }
+        const size = Math.min(CELL_W, CELL_H) * 0.60;
+        ctx.drawImage(icon, centerX - size / 2, centerY - size / 2 - 10, size, size);
+      } catch (e) {}
     }
 
-    // Texte en haut gauche : xN
-    const qtyText = `x${entry.quantity}`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.font = '16px OpenSans';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(qtyText, cellX + 8, cellY + 4);
+    // Quantité xN
+    ctx.font = "17px OpenSansBold";
+    ctx.textAlign = "left";
+    ctx.fillText(`x${entry.quantity}`, cellX + 10, cellY + 8);
 
-    // Texte en haut droite : poids individuel
-    const w = typeof itemDef.weight === 'number' ? itemDef.weight : 0;
-    const wText = `${w}kg`;
-    ctx.textAlign = 'right';
-    ctx.fillText(wText, cellX + CELL_W - 8, cellY + 4);
+    // Poids individuel
+    ctx.textAlign = "right";
+    ctx.fillText(`${item.weight}kg`, cellX + CELL_W - 10, cellY + 8);
 
-    // Texte en bas : nom de l’objet (dans le rectangle gris foncé du template)
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.font = '16px OpenSans';
-    ctx.fillStyle = '#e5e5e5';
+    // Nom
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(item.label, centerX, cellY + CELL_H - 5, CELL_W - 20);
+  });
 
-    const name = itemDef.label || entry.id;
-    const nameY = cellY + CELL_H - 6;
-    drawCenteredText(ctx, name, centerX, nameY, CELL_W - 12);
-  }
-
-  // Poids total dans un coin (en plus du visuel sur l’image)
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'bottom';
-  ctx.font = '20px OpenSans';
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText(`${weight.toFixed(1)} / 8 kg`, WIDTH - 20, HEIGHT - 20);
-
-  const buffer = canvas.toBuffer('image/png');
-  const filename = `inventory_${userId}.png`;
-
-  return { buffer, filename };
+  return { buffer: canvas.toBuffer(), filename: `inventory_${userId}.png` };
 }
 
 module.exports = {
