@@ -122,7 +122,7 @@ function panelEmbed() {
     )
     .setImage(
       TICKET_BANNER_URL ||
-        'https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/ticket/TICKET_South_Los_ Angeles.png',
+        'https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/ticket/TICKET_South_Los_Angeles.png',
     )
     .setFooter({
       text: TICKET_FOOTER_TEXT || 'South Los Angeles RP • Support',
