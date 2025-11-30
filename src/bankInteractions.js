@@ -32,7 +32,7 @@ const {
 
 const { renderUserBankCard } = require('./bankRenderer');
 
-// Rôles spéciaux
+// Rôles spéciaux (actuellement pas utilisés ici, mais dispo)
 const STAFF_ROLE_ID    = process.env.STAFF_ROLE_ID;
 const BANQUIER_ROLE_ID = process.env.BANQUIER_ROLE_ID;
 
@@ -77,11 +77,16 @@ function formatHistoryList(history) {
   return history
     .slice(0, 5)
     .map((h) => {
-      const date = new Date(h.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+      const date = new Date(h.at).toLocaleString('fr-FR', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      });
       const sign = h.amount >= 0 ? '+' : '-';
-      const amt  = Math.abs(h.amount).toFixed(2);
+      const amt = Math.abs(h.amount).toFixed(2);
       const type = h.type || 'mouvement';
-      return `• ${date} — **${type}** : \`${sign}$${amt}\` ${h.description ? `— ${h.description}` : ''}`;
+      return `• ${date} — **${type}** : \`${sign}$${amt}\` ${
+        h.description ? `— ${h.description}` : ''
+      }`;
     })
     .join('\n');
 }
@@ -95,7 +100,7 @@ function formatHistoryLinesForImage(history) {
   return history.slice(0, 7).map((h) => {
     const date = new Date(h.at).toLocaleDateString('fr-FR');
     const sign = h.amount >= 0 ? '+' : '-';
-    const amt  = Math.abs(h.amount).toFixed(2);
+    const amt = Math.abs(h.amount).toFixed(2);
     const type = h.type || 'mvt';
     return `${date} • ${type} • ${sign}$${amt}`;
   });
@@ -220,7 +225,8 @@ async function handlePinModal(interaction) {
 
   if (pin !== pinConfirm) {
     return interaction.reply({
-      content: '❌ Les deux codes PIN ne correspondent pas. Réessayez avec `/banque codedefinir`.',
+      content:
+        '❌ Les deux codes PIN ne correspondent pas. Réessayez avec `/banque codedefinir`.',
       ephemeral: true,
     });
   }
@@ -240,7 +246,8 @@ async function startUserPinFlow(interaction) {
 
   if (isUserAccountClosed(userId)) {
     return interaction.editReply({
-      content: '🚫 Votre compte bancaire est **clôturé**. Merci de contacter un banquier ou un membre du staff.',
+      content:
+        '🚫 Votre compte bancaire est **clôturé**. Merci de contacter un banquier ou un membre du staff.',
       embeds: [],
       components: [],
     });
@@ -284,20 +291,38 @@ async function startUserPinFlow(interaction) {
     if (res.ok) {
       collector.stop('success');
 
-      const profile  = getOrCreateUserProfile(userId);
-      const balance  = getBankBalance(userId);
+      const profile = getOrCreateUserProfile(userId);
+      const balance = getBankBalance(userId);
       const linesForImage = formatHistoryLinesForImage(profile.history);
 
-      const { buffer, filename } = await renderUserBankCard(balance, linesForImage);
+      // 💡 Ajout du username dans l’image (identifiant :)
+      const { buffer, filename } = await renderUserBankCard(
+        balance,
+        linesForImage,
+        interaction.user.username,
+      );
       const attachment = new AttachmentBuilder(buffer, { name: filename });
 
-      const accEmbed = buildUserAccountEmbed(interaction.user, profile, filename, balance);
+      const accEmbed = buildUserAccountEmbed(
+        interaction.user,
+        profile,
+        filename,
+        balance,
+      );
 
-      await interaction.editReply({ embeds: [accEmbed], files: [attachment], components: [] });
+      await interaction.editReply({
+        embeds: [accEmbed],
+        files: [attachment],
+        components: [],
+      });
       const message = await interaction.fetchReply();
 
       const row = buildUserAccountButtons(userId, message.id);
-      await message.edit({ embeds: [accEmbed], files: [attachment], components: [row] });
+      await message.edit({
+        embeds: [accEmbed],
+        files: [attachment],
+        components: [row],
+      });
 
       setTimeout(() => disableAllButtons(message), BUTTON_LIFETIME_MS);
       return;
@@ -306,7 +331,8 @@ async function startUserPinFlow(interaction) {
     if (res.reason === 'no_pin') {
       collector.stop('no_pin');
       return interaction.followUp({
-        content: '❌ Vous n’avez pas encore défini de code PIN. Utilisez `/banque codedefinir`.',
+        content:
+          '❌ Vous n’avez pas encore défini de code PIN. Utilisez `/banque codedefinir`.',
         ephemeral: true,
       });
     }
@@ -330,7 +356,7 @@ async function startUserPinFlow(interaction) {
     }
   });
 
-  collector.on('end', async (collected, reason) => {
+  collector.on('end', async (_collected, reason) => {
     if (reason === 'success' || reason === 'locked' || reason === 'no_pin') return;
     await interaction.followUp({
       content: '⏱️ Session PIN expirée. Relancez `/banque compte` pour réessayer.',
@@ -394,16 +420,30 @@ async function handleUserButtons(interaction, parts) {
       actorId: userId,
     });
 
-    const balance  = getBankBalance(userId);
-    const lines    = formatHistoryLinesForImage(profile.history);
-    const { buffer, filename } = await renderUserBankCard(balance, lines);
+    const balance = getBankBalance(userId);
+    const lines = formatHistoryLinesForImage(profile.history);
+    const { buffer, filename } = await renderUserBankCard(
+      balance,
+      lines,
+      interaction.user.username,
+    );
     const attachment = new AttachmentBuilder(buffer, { name: filename });
-    const accEmbed = buildUserAccountEmbed(interaction.user, profile, filename, balance);
+    const accEmbed = buildUserAccountEmbed(
+      interaction.user,
+      profile,
+      filename,
+      balance,
+    );
 
-    await message.edit({ embeds: [accEmbed], files: [attachment], components: [] });
+    await message.edit({
+      embeds: [accEmbed],
+      files: [attachment],
+      components: [],
+    });
 
     return interaction.reply({
-      content: '🗑️ Votre compte a été **clôturé**. Contactez un banquier si c’est une erreur.',
+      content:
+        '🗑️ Votre compte a été **clôturé**. Contactez un banquier si c’est une erreur.',
       ephemeral: true,
     });
   }
@@ -470,7 +510,10 @@ async function handleUserButtons(interaction, parts) {
 }
 
 async function handleUserMoneyModal(interaction, type, userId, messageId) {
-  const rawAmount = interaction.fields.getTextInputValue('amount').replace(',', '.').trim();
+  const rawAmount = interaction.fields
+    .getTextInputValue('amount')
+    .replace(',', '.')
+    .trim();
   const amount = parseFloat(rawAmount);
 
   if (isNaN(amount) || amount <= 0) {
@@ -486,7 +529,9 @@ async function handleUserMoneyModal(interaction, type, userId, messageId) {
     const cash = getCash(userId);
     if (cash < rounded) {
       return interaction.reply({
-        content: `❌ Tu n’as pas assez d’argent liquide. Cash disponible : **$${cash.toFixed(2)}**.`,
+        content: `❌ Tu n’as pas assez d’argent liquide. Cash disponible : **$${cash.toFixed(
+          2,
+        )}**.`,
         ephemeral: true,
       });
     }
@@ -530,14 +575,27 @@ async function handleUserMoneyModal(interaction, type, userId, messageId) {
   const channel = interaction.channel;
   const message = await channel.messages.fetch(messageId).catch(() => null);
   if (message) {
-    const profile  = getOrCreateUserProfile(userId);
-    const balance  = getBankBalance(userId);
-    const lines    = formatHistoryLinesForImage(profile.history);
-    const { buffer, filename } = await renderUserBankCard(balance, lines);
+    const profile = getOrCreateUserProfile(userId);
+    const balance = getBankBalance(userId);
+    const lines = formatHistoryLinesForImage(profile.history);
+    const { buffer, filename } = await renderUserBankCard(
+      balance,
+      lines,
+      interaction.user.username,
+    );
     const attachment = new AttachmentBuilder(buffer, { name: filename });
-    const accEmbed = buildUserAccountEmbed(interaction.user, profile, filename, balance);
+    const accEmbed = buildUserAccountEmbed(
+      interaction.user,
+      profile,
+      filename,
+      balance,
+    );
 
-    await message.edit({ embeds: [accEmbed], files: [attachment], components: message.components });
+    await message.edit({
+      embeds: [accEmbed],
+      files: [attachment],
+      components: message.components,
+    });
   }
 
   return interaction.reply({
@@ -606,7 +664,10 @@ async function handleTransferModal(interaction, parts) {
     });
   }
 
-  const rawAmount = interaction.fields.getTextInputValue('amount').replace(',', '.').trim();
+  const rawAmount = interaction.fields
+    .getTextInputValue('amount')
+    .replace(',', '.')
+    .trim();
   const amount = parseFloat(rawAmount);
   if (isNaN(amount) || amount <= 0) {
     return interaction.reply({
@@ -660,13 +721,26 @@ async function handleTransferModal(interaction, parts) {
     const channel = interaction.channel;
     const message = await channel.messages.fetch(messageId).catch(() => null);
     if (message) {
-      const profile  = getOrCreateUserProfile(userId);
-      const newBal   = getBankBalance(userId);
-      const lines    = formatHistoryLinesForImage(profile.history);
-      const { buffer, filename } = await renderUserBankCard(newBal, lines);
+      const profile = getOrCreateUserProfile(userId);
+      const newBal = getBankBalance(userId);
+      const lines = formatHistoryLinesForImage(profile.history);
+      const { buffer, filename } = await renderUserBankCard(
+        newBal,
+        lines,
+        interaction.user.username,
+      );
       const attachment = new AttachmentBuilder(buffer, { name: filename });
-      const accEmbed = buildUserAccountEmbed(interaction.user, profile, filename, newBal);
-      await message.edit({ embeds: [accEmbed], files: [attachment], components: message.components });
+      const accEmbed = buildUserAccountEmbed(
+        interaction.user,
+        profile,
+        filename,
+        newBal,
+      );
+      await message.edit({
+        embeds: [accEmbed],
+        files: [attachment],
+        components: message.components,
+      });
     }
 
     return interaction.reply({
@@ -718,13 +792,26 @@ async function handleTransferModal(interaction, parts) {
     const channel = interaction.channel;
     const message = await channel.messages.fetch(messageId).catch(() => null);
     if (message) {
-      const profile  = getOrCreateUserProfile(userId);
-      const newBal   = getBankBalance(userId);
-      const lines    = formatHistoryLinesForImage(profile.history);
-      const { buffer, filename } = await renderUserBankCard(newBal, lines);
+      const profile = getOrCreateUserProfile(userId);
+      const newBal = getBankBalance(userId);
+      const lines = formatHistoryLinesForImage(profile.history);
+      const { buffer, filename } = await renderUserBankCard(
+        newBal,
+        lines,
+        interaction.user.username,
+      );
       const attachment = new AttachmentBuilder(buffer, { name: filename });
-      const accEmbed = buildUserAccountEmbed(interaction.user, profile, filename, newBal);
-      await message.edit({ embeds: [accEmbed], files: [attachment], components: message.components });
+      const accEmbed = buildUserAccountEmbed(
+        interaction.user,
+        profile,
+        filename,
+        newBal,
+      );
+      await message.edit({
+        embeds: [accEmbed],
+        files: [attachment],
+        components: message.components,
+      });
     }
 
     return interaction.reply({
@@ -754,7 +841,9 @@ function buildEnterpriseEmbed(ent, balance) {
         `**Statut :** ${statusStr}`,
         `**Numéro de compte :** \`${ent.accountNumber}\``,
         '',
-        `💰 **Solde affiché :** \`$${balance.toFixed(2)}\` (simulation, à lier à l’éco entreprise)`,
+        `💰 **Solde affiché :** \`$${balance.toFixed(
+          2,
+        )}\` (simulation, à lier à l’éco entreprise)`,
       ].join('\n'),
     )
     .setImage(
