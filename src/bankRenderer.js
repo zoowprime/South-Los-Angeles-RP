@@ -2,7 +2,7 @@
 const path = require('path');
 const { createCanvas, loadImage, registerFont } = require('canvas');
 
-// Police Open Sans Bold (même que pour l'inventaire)
+// Police Open Sans Bold
 const FONT_PATH = path.join(__dirname, 'assets', 'fonts', 'OpenSans-Bold.ttf');
 try {
   registerFont(FONT_PATH, { family: 'Open Sans' });
@@ -20,8 +20,9 @@ const TEMPLATE_PATH = path.join(
 /**
  * historyLines: tableau de chaînes simples déjà formatées
  * balance: nombre
+ * username: nom Discord du joueur à afficher dans "identifiant"
  */
-async function renderUserBankCard(balance, historyLines) {
+async function renderUserBankCard(balance, historyLines, username) {
   const img = await loadImage(TEMPLATE_PATH);
   const canvas = createCanvas(img.width, img.height);
   const ctx = canvas.getContext('2d');
@@ -37,12 +38,25 @@ async function renderUserBankCard(balance, historyLines) {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
 
-  const balanceText = balance.toFixed(2); // ex: 1000.00
-  // Coordonnées approx pour la zone à droite du "$"
-  const BALANCE_X = 230; // ajuste au besoin
+  const balanceText = balance.toFixed(2);
+  const BALANCE_X = 230; 
   const BALANCE_Y = 260;
 
   ctx.fillText(balanceText, BALANCE_X, BALANCE_Y);
+
+  // ─────────────────────────────────────────────
+  // Zone IDENTIFIANT (rectangle rouge en haut à droite)
+  // ─────────────────────────────────────────────
+  ctx.font = '28px "Open Sans"';
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+
+  // Coordonnées précises à ajuster si besoin
+  const IDENT_X = 1180; // ≈ zone rouge
+  const IDENT_Y = 120;
+
+  ctx.fillText(username, IDENT_X, IDENT_Y);
 
   // ─────────────────────────────────────────────
   // Zone HISTORIQUE (bloc bas gauche)
@@ -52,8 +66,8 @@ async function renderUserBankCard(balance, historyLines) {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'top';
 
-  const startX = 180; // un peu à droite du bord du bloc
-  let startY = 470;   // juste sous le logo & le titre
+  const startX = 180;
+  let startY = 470;
   const lineHeight = 26;
 
   historyLines.slice(0, 7).forEach((line) => {
@@ -62,6 +76,7 @@ async function renderUserBankCard(balance, historyLines) {
   });
 
   const buffer = canvas.toBuffer('image/png');
+
   return {
     buffer,
     filename: 'user_bank_account_dynamic.png',
