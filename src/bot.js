@@ -21,7 +21,9 @@ const { handleBankInteraction }                   = require('./bankInteractions'
 // ─────────────────────────────────────────────────────────────
 const client = new Client({
   intents: [
-    GatewayIntentBits.Guilds, // slash commands & interactions
+    GatewayIntentBits.Guilds,          // slash commands & interactions
+    GatewayIntentBits.GuildMessages,   // lecture des messages pour le PIN, etc.
+    GatewayIntentBits.MessageContent,  // contenu des messages (PIN, montants...)
   ],
 });
 
