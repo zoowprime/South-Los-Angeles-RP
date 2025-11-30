@@ -8,6 +8,7 @@ const {
   EmbedBuilder,
   ButtonBuilder,
   ButtonStyle,
+  AttachmentBuilder,
 } = require('discord.js');
 
 const {
@@ -28,9 +29,8 @@ const {
   getOrCreateAccount,
   updateAccount,
 } = require('./data/economyData');
-const {
-  createEnterprise,
-} = require('./data/bankData');
+
+const { renderUserBankCard } = require('./bankRenderer');
 
 // Rôles spéciaux
 const STAFF_ROLE_ID    = process.env.STAFF_ROLE_ID;
@@ -61,7 +61,7 @@ function getBankBalance(userId) {
 function setBankBalance(userId, amount) {
   updateAccount(userId, (acc) => {
     if (!acc.courant) acc.courant = { cash: 0, banque: 0 };
-    acc.courant.banque = Math.max(0, Math.round(amount));
+    acc.courant.banque = Math.max(0, Math.round(amount * 100) / 100);
   });
 }
 
@@ -86,12 +86,26 @@ function formatHistoryList(history) {
     .join('\n');
 }
 
+// Version courte, sans markdown, pour l’image
+function formatHistoryLinesForImage(history) {
+  if (!history || !history.length) {
+    return ['Aucune transaction récente'];
+  }
+
+  return history.slice(0, 7).map((h) => {
+    const date = new Date(h.at).toLocaleDateString('fr-FR');
+    const sign = h.amount >= 0 ? '+' : '-';
+    const amt  = Math.abs(h.amount).toFixed(2);
+    const type = h.type || 'mvt';
+    return `${date} • ${type} • ${sign}$${amt}`;
+  });
+}
+
 /* ────────────────────────────────────────────────────────────
  * Construction embed compte perso
  * ──────────────────────────────────────────────────────────── */
 
-function buildUserAccountEmbed(user, profile) {
-  const balance = getBankBalance(user.id);
+function buildUserAccountEmbed(user, profile, filename, balance) {
   const historyText = formatHistoryList(profile.history);
 
   const statusStr =
@@ -111,9 +125,7 @@ function buildUserAccountEmbed(user, profile) {
         `💰 **Solde actuel :** \`$${balance.toFixed(2)}\``,
       ].join('\n'),
     )
-    .setImage(
-      'https://raw.githubusercontent.com/zoowprime/South-Los-Angeles-RP/main/src/assets/bank/user_bank_account.png',
-    )
+    .setImage(`attachment://${filename}`)
     .addFields({
       name: '📜 Historique récent',
       value: historyText,
@@ -170,7 +182,6 @@ async function disableAllButtons(message) {
 /* ───────────────── PIN SETUP ( /banque codedefinir ) ───────────────── */
 
 async function handlePinSelect(interaction) {
-  // select menu unique "continuer" → modal
   if (interaction.customId !== 'bank_setpin_continue') return;
 
   const modal = new ModalBuilder()
@@ -235,7 +246,7 @@ async function startUserPinFlow(interaction) {
     });
   }
 
-  const profile = getOrCreateUserProfile(userId);
+  getOrCreateUserProfile(userId); // s’assure qu’il existe
 
   const embed = new EmbedBuilder()
     .setColor(0x14532d)
@@ -273,17 +284,21 @@ async function startUserPinFlow(interaction) {
     if (res.ok) {
       collector.stop('success');
 
-      const updatedProfile = getOrCreateUserProfile(userId);
-      const accEmbed = buildUserAccountEmbed(interaction.user, updatedProfile);
+      const profile  = getOrCreateUserProfile(userId);
+      const balance  = getBankBalance(userId);
+      const linesForImage = formatHistoryLinesForImage(profile.history);
 
-      await interaction.editReply({ embeds: [accEmbed], components: [] });
+      const { buffer, filename } = await renderUserBankCard(balance, linesForImage);
+      const attachment = new AttachmentBuilder(buffer, { name: filename });
+
+      const accEmbed = buildUserAccountEmbed(interaction.user, profile, filename, balance);
+
+      await interaction.editReply({ embeds: [accEmbed], files: [attachment], components: [] });
       const message = await interaction.fetchReply();
 
-      // Ajouter les boutons avec l’ID du message
       const row = buildUserAccountButtons(userId, message.id);
-      await message.edit({ embeds: [accEmbed], components: [row] });
+      await message.edit({ embeds: [accEmbed], files: [attachment], components: [row] });
 
-      // Désactiver les boutons après 3 minutes
       setTimeout(() => disableAllButtons(message), BUTTON_LIFETIME_MS);
       return;
     }
@@ -327,7 +342,7 @@ async function startUserPinFlow(interaction) {
 /* ────────────────── BOUTONS & MODALS COMPTE PERSO ────────────────── */
 
 async function handleUserButtons(interaction, parts) {
-  const [prefix, userId, messageId, action] = parts; // bank_user|<userId>|<messageId>|<action>
+  const [prefix, userId, messageId, action] = parts;
 
   if (prefix !== 'bank_user') return;
   if (interaction.user.id !== userId) {
@@ -359,7 +374,6 @@ async function handleUserButtons(interaction, parts) {
     });
   }
 
-  // Déconnexion
   if (action === 'logout') {
     await message.delete().catch(() => {});
     return interaction.reply({
@@ -368,7 +382,6 @@ async function handleUserButtons(interaction, parts) {
     });
   }
 
-  // Clôturer
   if (action === 'close') {
     const profile = getOrCreateUserProfile(userId);
     profile.status = 'closed';
@@ -381,8 +394,13 @@ async function handleUserButtons(interaction, parts) {
       actorId: userId,
     });
 
-    const accEmbed = buildUserAccountEmbed(interaction.user, profile);
-    await message.edit({ embeds: [accEmbed], components: [] });
+    const balance  = getBankBalance(userId);
+    const lines    = formatHistoryLinesForImage(profile.history);
+    const { buffer, filename } = await renderUserBankCard(balance, lines);
+    const attachment = new AttachmentBuilder(buffer, { name: filename });
+    const accEmbed = buildUserAccountEmbed(interaction.user, profile, filename, balance);
+
+    await message.edit({ embeds: [accEmbed], files: [attachment], components: [] });
 
     return interaction.reply({
       content: '🗑️ Votre compte a été **clôturé**. Contactez un banquier si c’est une erreur.',
@@ -390,7 +408,6 @@ async function handleUserButtons(interaction, parts) {
     });
   }
 
-  // Dépôt
   if (action === 'deposit') {
     const modal = new ModalBuilder()
       .setCustomId(`bank_user_deposit|${userId}|${messageId}`)
@@ -407,7 +424,6 @@ async function handleUserButtons(interaction, parts) {
     return interaction.showModal(modal);
   }
 
-  // Retrait
   if (action === 'withdraw') {
     const modal = new ModalBuilder()
       .setCustomId(`bank_user_withdraw|${userId}|${messageId}`)
@@ -424,9 +440,7 @@ async function handleUserButtons(interaction, parts) {
     return interaction.showModal(modal);
   }
 
-  // Virement
   if (action === 'transfer') {
-    // Menu type de compte destinataire
     const row = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId(`bank_transfer_type|${userId}|${messageId}`)
@@ -512,13 +526,18 @@ async function handleUserMoneyModal(interaction, type, userId, messageId) {
     });
   }
 
-  // Rafraîchir le panneau principal
+  // Rafraîchir le panneau principal (embed + image)
   const channel = interaction.channel;
   const message = await channel.messages.fetch(messageId).catch(() => null);
   if (message) {
-    const profile = getOrCreateUserProfile(userId);
-    const accEmbed = buildUserAccountEmbed(interaction.user, profile);
-    await message.edit({ embeds: [accEmbed], components: message.components });
+    const profile  = getOrCreateUserProfile(userId);
+    const balance  = getBankBalance(userId);
+    const lines    = formatHistoryLinesForImage(profile.history);
+    const { buffer, filename } = await renderUserBankCard(balance, lines);
+    const attachment = new AttachmentBuilder(buffer, { name: filename });
+    const accEmbed = buildUserAccountEmbed(interaction.user, profile, filename, balance);
+
+    await message.edit({ embeds: [accEmbed], files: [attachment], components: message.components });
   }
 
   return interaction.reply({
@@ -533,7 +552,7 @@ async function handleUserMoneyModal(interaction, type, userId, messageId) {
 /* ───────────────────── TRANSFERTS (USER → USER / ENT) ───────────────── */
 
 async function handleTransferTypeSelect(interaction, parts) {
-  const [_, userId, messageId] = parts; // bank_transfer_type|userId|messageId
+  const [_, userId, messageId] = parts;
   if (interaction.user.id !== userId) {
     return interaction.reply({
       content: '❌ Ce menu ne t’est pas destiné.',
@@ -541,7 +560,7 @@ async function handleTransferTypeSelect(interaction, parts) {
     });
   }
 
-  const typeDest = interaction.values[0]; // user | enterprise
+  const typeDest = interaction.values[0];
 
   const modal = new ModalBuilder()
     .setCustomId(`bank_transfer_modal|${userId}|${messageId}|${typeDest}`)
@@ -569,14 +588,16 @@ async function handleTransferTypeSelect(interaction, parts) {
     new ActionRowBuilder().addComponents(target),
   );
 
-  return interaction.update({
-    content: '🔁 Remplis le formulaire de virement.',
-    components: [],
-  }).then(() => interaction.showModal(modal));
+  return interaction
+    .update({
+      content: '🔁 Remplis le formulaire de virement.',
+      components: [],
+    })
+    .then(() => interaction.showModal(modal));
 }
 
 async function handleTransferModal(interaction, parts) {
-  const [_, userId, messageId, typeDest] = parts; // bank_transfer_modal|userId|messageId|<typeDest>
+  const [_, userId, messageId, typeDest] = parts;
 
   if (interaction.user.id !== userId) {
     return interaction.reply({
@@ -606,15 +627,12 @@ async function handleTransferModal(interaction, parts) {
   const rawTarget = interaction.fields.getTextInputValue('target').trim();
 
   if (typeDest === 'user') {
-    // essayer de récupérer l’ID
     let targetId = rawTarget;
-
     const mentionMatch = rawTarget.match(/^<@!?(\d+)>$/);
     if (mentionMatch) {
       targetId = mentionMatch[1];
     }
 
-    // débiter
     setBankBalance(userId, balance - rounded);
     const targetBalance = getBankBalance(targetId);
     setBankBalance(targetId, targetBalance + rounded);
@@ -642,9 +660,13 @@ async function handleTransferModal(interaction, parts) {
     const channel = interaction.channel;
     const message = await channel.messages.fetch(messageId).catch(() => null);
     if (message) {
-      const profile = getOrCreateUserProfile(userId);
-      const accEmbed = buildUserAccountEmbed(interaction.user, profile);
-      await message.edit({ embeds: [accEmbed], components: message.components });
+      const profile  = getOrCreateUserProfile(userId);
+      const newBal   = getBankBalance(userId);
+      const lines    = formatHistoryLinesForImage(profile.history);
+      const { buffer, filename } = await renderUserBankCard(newBal, lines);
+      const attachment = new AttachmentBuilder(buffer, { name: filename });
+      const accEmbed = buildUserAccountEmbed(interaction.user, profile, filename, newBal);
+      await message.edit({ embeds: [accEmbed], files: [attachment], components: message.components });
     }
 
     return interaction.reply({
@@ -654,7 +676,6 @@ async function handleTransferModal(interaction, parts) {
   }
 
   if (typeDest === 'enterprise') {
-    // on cherche une entreprise par ID direct ou par owner
     let ent = getEnterprise(rawTarget);
     if (!ent) {
       ent = getEnterpriseByOwner(rawTarget);
@@ -675,7 +696,6 @@ async function handleTransferModal(interaction, parts) {
 
     setBankBalance(userId, balance - rounded);
 
-    // Pour simplifier : on stocke le solde entreprise uniquement dans l’historique / externe
     addEnterpriseHistoryEntry(ent.id, {
       type: 'virement entrant',
       amount: +rounded,
@@ -698,9 +718,13 @@ async function handleTransferModal(interaction, parts) {
     const channel = interaction.channel;
     const message = await channel.messages.fetch(messageId).catch(() => null);
     if (message) {
-      const profile = getOrCreateUserProfile(userId);
-      const accEmbed = buildUserAccountEmbed(interaction.user, profile);
-      await message.edit({ embeds: [accEmbed], components: message.components });
+      const profile  = getOrCreateUserProfile(userId);
+      const newBal   = getBankBalance(userId);
+      const lines    = formatHistoryLinesForImage(profile.history);
+      const { buffer, filename } = await renderUserBankCard(newBal, lines);
+      const attachment = new AttachmentBuilder(buffer, { name: filename });
+      const accEmbed = buildUserAccountEmbed(interaction.user, profile, filename, newBal);
+      await message.edit({ embeds: [accEmbed], files: [attachment], components: message.components });
     }
 
     return interaction.reply({
@@ -754,7 +778,7 @@ async function handleBankInteraction(interaction) {
     }
 
     if (interaction.customId.startsWith('bank_transfer_type')) {
-      const parts = interaction.customId.split('|'); // bank_transfer_type|userId|messageId
+      const parts = interaction.customId.split('|');
       return handleTransferTypeSelect(interaction, parts);
     }
   }
